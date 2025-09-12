@@ -11,10 +11,8 @@ app.use(morgan('combined'));
 app.use(express.json());
 app.use(cors());
 
-// Health endpoints
-app.get(['/hc', '/_health'], (_req, res) => res.status(200).send('ok'));
-app.get('/healthz', (req, res) => res.status(200).send('ok')); // útil en local
-app.get('/readyz', (_req, res) => res.status(200).send('ready'));
+// Endpoints de salud unificados
+app.get(['/hc', '/_health', '/healthz'], (_req, res) => res.status(200).send('ok'));
 
 // Raíz
 app.get('/', (_req, res) => res.send({ message: 'Base OK: Node + Express listo para Cloud Run' }));
