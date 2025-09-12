@@ -1,0 +1,31 @@
+# cloudbuild.yaml
+substitutions:
+  _REGION: us-central1
+  _REPO: webservices
+  _SERVICE: axis-orders
+  _IMAGE: us-central1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}
+
+steps:
+  # 1) Build con tu Dockerfile, tag por commit y latest
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-t', '${_IMAGE}:$COMMIT_SHA', '-t', '${_IMAGE}:latest', '.']
+
+  # 2) Push de ambas etiquetas
+  - name: gcr.io/cloud-builders/docker
+    args: ['push', '${_IMAGE}:$COMMIT_SHA']
+  - name: gcr.io/cloud-builders/docker
+    args: ['push', '${_IMAGE}:latest']
+
+  # 3) Deploy a Cloud Run (servicio autenticado)
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      ['run','deploy','${_SERVICE}',
+       '--image','${_IMAGE}:$COMMIT_SHA',
+       '--region','${_REGION}',
+       '--allow-unauthenticated=false',
+       '--set-env-vars','NODE_ENV=production']
+
+images:
+  - '${_IMAGE}:$COMMIT_SHA'
+  - '${_IMAGE}:latest'
