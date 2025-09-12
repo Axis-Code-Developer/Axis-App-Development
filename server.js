@@ -12,7 +12,7 @@ app.use(express.json());
 app.use(cors());
 
 app.get('/healthz', (_req, res) => res.status(200).send('ok'));
-app.get('/readyz', (_req, res) => res.status(200).send('ready'));
+app.get(['/hc','/_health','/readyz'], (_req, res) => res.status(200).send('ok'));
 app.get('/', (_req, res) => res.send({ message: 'Base OK: Node + Express listo para Cloud Run' }));
 
 const PORT = process.env.PORT || 3000;
