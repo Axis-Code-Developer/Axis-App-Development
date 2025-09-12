@@ -11,11 +11,15 @@ app.use(morgan('combined'));
 app.use(express.json());
 app.use(cors());
 
-app.get('/healthz', (_req, res) => res.status(200).send('ok'));
-app.get(['/hc','/_health','/readyz'], (_req, res) => res.status(200).send('ok'));
+// Health endpoints
+app.get(['/hc', '/_health'], (_req, res) => res.status(200).send('ok'));
+app.get('/healthz', (req, res) => res.status(200).send('ok')); // útil en local
+app.get('/readyz', (_req, res) => res.status(200).send('ready'));
+
+// Raíz
 app.get('/', (_req, res) => res.send({ message: 'Base OK: Node + Express listo para Cloud Run' }));
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000; // En Cloud Run será 8080
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server listening on http://0.0.0.0:${PORT}`);
 });
