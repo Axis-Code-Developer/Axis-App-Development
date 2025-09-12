@@ -5,6 +5,9 @@ substitutions:
   _SERVICE: axis-orders
   _IMAGE: us-central1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}
 
+options:
+  logging: CLOUD_LOGGING_ONLY
+
 steps:
   # 1) Build con tu Dockerfile, tag por commit y latest
   - name: gcr.io/cloud-builders/docker
