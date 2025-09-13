@@ -12,6 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@google-cloud/firestore": "^7.11.3",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
     "express": "^5.1.0",
