@@ -1,29 +1,63 @@
+// server.js (mínimo y estable)
+require('dotenv').config();
+
 const express = require('express');
-const compression = require('compression');
-const helmet = require('helmet');
 const cors = require('cors');
-const morgan = require('morgan');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+
+const wooWebhook = require('./routes/webhooks/woo');
+const { verifyIdToken, requireRole } = require('./src/middleware/auth');
+const ordersRouter = require('./routes/orders');
+const orderActions = require('./routes/orderActions');
+const adminUsers = require('./routes/adminUsers');
+const debugRouter = require('./routes/debug');
 
 const app = express();
+
+// 4) Seguridad y configuración base (antes de rutas normales)
 app.use(helmet());
-app.use(compression());
-app.use(morgan('combined'));
-app.use(express.json());
+app.use(cors({
+  origin: (origin, cb) => {
+    const allow = (process.env.CORS_ORIGIN || '').split(',').map(s => s.trim()).filter(Boolean);
+    return cb(null, !origin || allow.includes(origin));
+  },
+  credentials: true
+}));
+app.use(rateLimit({ windowMs: 60_000, max: 60 }));
 
-// CORS abierto por ahora (podemos restringir dominios luego)
-app.use(cors());
+// 1) Ruta de salud (debe responder de inmediato)
+app.get('/healthz', (_req, res) => res.type('text/plain').send('ok'));
 
-// Health checks unificados
-app.get(['/hc', '/_health'], (_req, res) => res.status(200).send('ok'));
+// 2) Montar webhook de Woo con raw body ANTES del json global
+app.use('/webhooks/woo', express.raw({ type: 'application/json' }), wooWebhook);
 
-// API
-const ordersRouter = require('./routes/orders');
-app.use('/api/orders', ordersRouter);
+// 3) Ahora sí, el body parser global para el resto de rutas
+app.use(express.json({ limit: '1mb' }));
 
-// Raíz
-app.get('/', (_req, res) => res.send({ message: 'Base OK: Node + Express listo para Cloud Run' }));
+// 5) Rutas de órdenes (lectura pública por ahora; si quieres, movemos detrás de verifyIdToken)
+app.use('/api/orders', verifyIdToken, ordersRouter);
+app.use('/api/debug', debugRouter);
 
-const PORT = process.env.PORT || 8080; // Cloud Run usa 8080
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server listening on http://0.0.0.0:${PORT}`);
+// 6) Protege acciones sobre órdenes (crear/actualizar/borrar status, etc.)
+app.use('/api/orders', verifyIdToken, orderActions);
+
+// 7) Protege admin (crear usuarios y asignar claims)
+app.use('/api/admin', verifyIdToken, requireRole('admin'), express.json(), adminUsers);
+
+// Monta debug sin prefijo (todas las rutas definidas en routes/debug.js)
+app.use(require('./routes/debug'));
+
+// Monta rutas de desarrollo/seed
+app.use(require('./routes/dev.seed'));
+
+// Monta rutas de pruebas QA
+app.use(require('./routes/orders.qa'));
+
+// (opcional futuro) otras rutas
+
+// Arrancar servidor
+const port = process.env.PORT || 8080;
+app.listen(port, () => {
+  console.log(`Server listening on http://0.0.0.0:${port}`);
 });

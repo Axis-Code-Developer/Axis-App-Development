@@ -1,42 +1,46 @@
+// routes/orders.js
 const express = require('express');
-const { Firestore } = require('@google-cloud/firestore');
-
+const { db } = require('../src/services/db');
 const router = express.Router();
-const db = new Firestore();
-const col = db.collection('orders');
 
-router.get('/', async (_req, res) => {
+/**
+ * Lista últimas órdenes. Robust:
+ * - Intenta ordenar por createdAt desc.
+ * - Si falla (campo faltante / tipos), hace fallback a leer sin orden y ordena en memoria.
+ * - Loguea el error real para depurar.
+ */
+router.get('/', async (req, res) => {
   try {
-    const snap = await col.orderBy('createdAt', 'desc').limit(50).get();
-    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    res.json({ items, count: items.length });
-  } catch (err) {
-    res.status(500).json({ error: 'list_failed', details: String(err) });
-  }
-});
+    // si viene autenticado, filtramos por tenantId
+    const tenantId = req.user?.tenantId;
+    let q = db.collection('orders');
+    if (tenantId) q = q.where('tenantId', '==', tenantId);
 
-router.post('/', async (req, res) => {
-  try {
-    const { customer, total } = req.body || {};
-    if (!customer || typeof total !== 'number') {
-      return res.status(400).json({ error: 'customer (string) and total (number) are required' });
+    let items = [];
+    try {
+      const snap = await q.orderBy('createdAt', 'desc').limit(50).get();
+      items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch (inner) {
+      const snap = await q.limit(50).get();
+      items = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     }
-    const id = `ORD-${Math.floor(Date.now() / 1000)}`;
-    const order = { id, customer, total, createdAt: new Date().toISOString() };
-    await col.doc(id).set(order);
-    res.status(201).json(order);
-  } catch (err) {
-    res.status(500).json({ error: 'create_failed', details: String(err) });
+    res.json({ items, count: items.length });
+  } catch (e) {
+    console.error('[orders:list] fatal', e);
+    res.status(500).json({ error: 'list_failed' });
   }
 });
 
 router.get('/:id', async (req, res) => {
   try {
-    const d = await col.doc(req.params.id).get();
-    if (!d.exists) return res.status(404).json({ error: 'not_found' });
-    res.json(d.data());
-  } catch (err) {
-    res.status(500).json({ error: 'get_failed', details: String(err) });
+    const id = String(req.params.id);
+    const doc = await db.collection('orders').doc(id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'not_found' });
+    return res.json({ id: doc.id, ...doc.data() });
+  } catch (e) {
+    console.error('[orders:get] error', e);
+    return res.status(500).json({ error: 'get_failed' });
   }
 });
 
